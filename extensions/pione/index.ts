@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { lastTurn, renderTurn } from "./turn.ts";
+import { registerMcp } from "./mcp.ts";
 
 // Executed inside Fresh, not in Pi. Only the quoted absolute path is interpolated.
 function openInTopPane(file: string): string {
@@ -44,6 +45,7 @@ function runFresh(script: string): Promise<void> {
 }
 
 export default function (pi: ExtensionAPI) {
+	registerMcp(pi);
 	pi.registerCommand("fresh-show-turn", {
 		description: "Export the last turn of this Pi session to Markdown and show it in Fresh's top pane",
 		handler: async (_args, ctx) => {

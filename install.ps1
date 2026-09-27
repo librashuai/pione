@@ -14,6 +14,14 @@ New-Item -ItemType Directory -Path $extensionsDir -Force | Out-Null
 if (Test-Path -LiteralPath $destination) {
     Remove-Item -LiteralPath $destination -Recurse -Force
 }
-Copy-Item -LiteralPath $source -Destination $destination -Recurse -Force
+New-Item -ItemType Directory -Path $destination -Force | Out-Null
+Get-ChildItem -LiteralPath $source -Force | Where-Object { $_.Name -ne 'node_modules' } | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force
+}
+Push-Location $destination
+try {
+    npm ci --omit=dev --no-audit --no-fund
+    if ($LASTEXITCODE -ne 0) { throw "npm ci failed: $LASTEXITCODE" }
+} finally { Pop-Location }
 Write-Host "Installed Pione extension at: $destination"
-Write-Host 'Run /reload in Pi (or restart Pi), then use /fresh-show-turn.'
+Write-Host 'Run /reload in Pi (or restart Pi), then use /fresh-show-turn or /mcp list.'
