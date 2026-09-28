@@ -7,11 +7,12 @@ import { StreamableHTTPServerTransport } from '../extensions/pione/node_modules/
 import { z } from '../extensions/pione/node_modules/zod/index.js';
 import { registerMcp } from '../extensions/pione/mcp.ts';
 import { connectServer, validateConfig } from '../extensions/pione/mcp-client.ts';
+import { visibleWidth } from '../extensions/pione/node_modules/@earendil-works/pi-tui/dist/index.js';
 
 function simulation(defaultServers = [], remoteNames = { alpha: 'search', beta: 'lookup' }, connectionHook = () => {}) {
   const handlers = new Map(), commands = new Map(), tools = new Map();
   const branch = [], messages = [], calls = [], closed = [];
-  let active = ['bash'];
+  let active = ['bash'], footer, renderCount = 0;
   const connections = [];
   const names = remoteNames;
   const config = { servers: { alpha: { command: 'fake' }, beta: { command: 'fake' } }, defaultServers };
@@ -24,7 +25,13 @@ function simulation(defaultServers = [], remoteNames = { alpha: 'search', beta: 
     appendEntry: (customType, data) => branch.push({ type: 'custom', customType, data }),
     sendMessage: (message, options) => { messages.push({ message, options }); branch.push({ type: 'message', message: { role: 'custom', ...message } }); },
   };
-  const ctx = { sessionManager: { getBranch: () => branch }, ui: { notify: (text, level) => messages.push({ text, level }) },
+  const ctx = { mode: 'tui', model: { id: 'test-model', contextWindow: 10000 },
+    getContextUsage: () => ({ percent: 25, contextWindow: 10000 }),
+    sessionManager: { getBranch: () => branch, getEntries: () => branch, getCwd: () => process.cwd(), getSessionName: () => undefined },
+    ui: { notify: (text, level) => messages.push({ text, level }),
+      setFooter: factory => { footer?.dispose(); footer = factory({ requestRender: () => renderCount++ },
+        { fg: (_color, text) => text }, { getGitBranch: () => undefined, getExtensionStatuses: () => new Map(),
+          onBranchChange: () => () => {} }); } },
     waitForIdle: async () => {} };
   registerMcp(pi, { config: async () => config, connect: async spec => {
     const server = Object.entries(config.servers).find(([, s]) => s === spec)[0];
@@ -39,10 +46,32 @@ function simulation(defaultServers = [], remoteNames = { alpha: 'search', beta: 
   } });
   const fire = (name, event = {}) => handlers.get(name)(event, ctx);
   const run = (arg) => commands.get('mcp').handler(arg, ctx);
-  return { fire, run, pi, ctx, branch, messages, calls, closed, tools, connections, get active() { return active; } };
+  return { fire, run, pi, ctx, branch, messages, calls, closed, tools, connections,
+    get footer() { return footer; }, get renderCount() { return renderCount; }, get active() { return active; } };
 }
 
 const user = text => ({ type: 'message', message: { role: 'user', content: text } });
+
+test('compact footer omits costs and tracks selected MCP servers across commands, branches and resumes', async () => {
+  const s = simulation(['alpha']);
+  await s.fire('session_start');
+  s.branch.push({ type: 'message', message: { role: 'assistant', usage: { input: 120, output: 30,
+    cost: { total: 99 } } } });
+  assert.match(s.footer.render(100)[1], /MCP:1 ↑120 ↓30/);
+  assert(!s.footer.render(100).join(' ').includes('$'));
+  assert.equal(s.footer.render(8).every(line => visibleWidth(line) <= 8), true);
+  assert.match(s.footer.render(8)[1], /MCP:1/);
+  s.branch.push(user('work'));
+  const before = s.renderCount;
+  await s.run('on beta');
+  assert(s.renderCount > before);
+  assert.match(s.footer.render(100)[1], /MCP:2/);
+  s.branch.splice(0, s.branch.length, user('other branch'));
+  await s.fire('session_tree');
+  assert.match(s.footer.render(100)[1], /MCP:0/);
+  await s.fire('session_start');
+  assert.match(s.footer.render(100)[1], /MCP:0/);
+});
 
 test('initial selection is a real tool; late selection is described once at the tail, promoted only after successful compaction', async () => {
   const s = simulation(['alpha']);

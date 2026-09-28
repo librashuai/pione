@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { Type } from "typebox";
 import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { connectServer, loadConfig, type Connection, type McpConfig, type RemoteTool } from "./mcp-client.ts";
+import { setCompactFooter } from "./footer.ts";
 
 type Stage = "late" | "direct";
 type Selection = { server: string; stage: Stage; fingerprint: string };
@@ -56,6 +57,7 @@ export function registerMcp(pi: ExtensionAPI, options: {
 	const registered = new Set<string>();
 	const owners = new Map<string, string>();
 	const toolSnapshots = new Map<string, string>();
+	let refreshFooter = () => {};
 
 	async function closeAll() {
 		const old = [...connections.values()];
@@ -71,6 +73,7 @@ export function registerMcp(pi: ExtensionAPI, options: {
 			for (const tool of connections.get(server)!.tools) active.push(toolName(server, tool.name));
 		}
 		if (active.join("\0") !== pi.getActiveTools().join("\0")) pi.setActiveTools(active);
+		refreshFooter();
 	}
 	function registerDirect(server: string, conn: Connection) {
 		for (const remote of conn.tools) {
@@ -196,6 +199,7 @@ export function registerMcp(pi: ExtensionAPI, options: {
 			activate();
 			ctx.ui.notify(`MCP config: ${String(error)}`, "error");
 		}
+		refreshFooter = setCompactFooter(ctx, () => selected.size);
 	});
 	pi.on("session_tree", async (_event, ctx) => {
 		await restore(ctx.sessionManager.getBranch(), false, text => ctx.ui.notify(text, "error"));
@@ -250,7 +254,7 @@ export function registerMcp(pi: ExtensionAPI, options: {
 			} : message),
 		] };
 	});
-	pi.on("session_shutdown", async () => { await closeAll(); selected.clear(); });
+	pi.on("session_shutdown", async () => { await closeAll(); selected.clear(); refreshFooter = () => {}; });
 	pi.registerCommand("mcp", {
 		description: "MCP servers: /mcp list | /mcp on <server>",
 		handler: async (args, ctx) => {

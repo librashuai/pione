@@ -1,6 +1,6 @@
 # Pione
 
-个人 Pi 扩展，提供 `/fresh-show-turn` 和按会话选择的两阶段 MCP（stdio / Streamable HTTP）。`/fresh-show-turn` 把当前 session **活动分支**的最后一个用户回合（用户消息、助手文本、工具调用与工具结果）导出为 Markdown，在 [Fresh](https://github.com/sinelaw/fresh) 的顶部文件 pane 打开。思考内容和图片数据不导出。
+个人 Pi 扩展，提供 `/fresh-show-turn` 和按会话选择的两阶段 MCP（stdio / Streamable HTTP）。交互模式下使用紧凑的底部状态栏：不计算或显示费用，保留路径、token、上下文、模型及其他插件状态，并在统计行显示 `MCP:N`（当前活动分支已成功激活的服务数，含 direct / late；无服务时为 0）。`/fresh-show-turn` 把当前 session **活动分支**的最后一个用户回合（用户消息、助手文本、工具调用与工具结果）导出为 Markdown，在 [Fresh](https://github.com/sinelaw/fresh) 的顶部文件 pane 打开。思考内容和图片数据不导出。
 
 ## 安装（Windows PowerShell）
 
@@ -26,7 +26,7 @@ pwsh -File .\install.ps1
 
 省略 `transport` 表示 stdio；HTTP 使用 MCP **Streamable HTTP**（不支持旧 SSE），支持可选 `headers`（如 HTTPS 服务的 `Authorization`）。出于安全考虑明文 HTTP 只允许回环地址，远程连接必须使用 HTTPS；不能把带用户名密码的 URL 当作认证配置。`callTimeoutMs` 默认 60000，范围 10–600000 毫秒。stdio 命令不经 shell。服务端进程和远程 HTTP 服务都可能读取敏感数据，配置文件中的令牌、对话内容及浏览器页面不要随意分享。
 
-配置文件仅在会话启动或 `/reload` 时读取；`defaultServers` 在**新会话**首轮前注册为原生 tools，可留空。用 `/mcp list` 查看状态，`/mcp on <server>` 为当前会话增加服务：首轮用户消息前直接注册原生 tools；首轮后在会话尾部插入一次带完整 JSON schema 的描述，通过固定的 `pione_mcp_call` 工具调用。**成功**压缩后，晚加入的工具才转成原生 tools，描述不再发送给模型。Pi 会先保存压缩快照、再将这些工具写作会话末尾的 system 变更；pione 通过 `context_with_system` **仅在后续模型请求中**把已升级的工具声明移到系统头部，而不改写会话记录或其他插件的 system 变更。失败或取消压缩不会升级。会话恢复和 `/tree` 切换按活动分支恢复；已从配置删除的服务不会被历史会话重新激活。服务端工具 schema 变化时需新建会话。工具调用顺序执行；超时后重置该连接，进程或远程会话内的状态可能丢失。晚加入的桥接调用不享有提供商侧原生工具 schema 校验，压缩后缓存也不保证保留。
+配置文件仅在会话启动或 `/reload` 时读取；`defaultServers` 在**新会话**首轮前注册为原生 tools，可留空。用 `/mcp list` 查看状态，`/mcp on <server>` 为当前会话增加服务：首轮用户消息前直接注册原生 tools；首轮后在会话尾部插入一次带完整 JSON schema 的描述，通过固定的 `pione_mcp_call` 工具调用。**成功**压缩后，晚加入的工具才转成原生 tools，描述不再发送给模型。Pi 会先保存压缩快照、再将这些工具写作会话末尾的 system 变更；pione 通过 `context_with_system` **仅在后续模型请求中**把已升级的工具声明移到系统头部，而不改写会话记录或其他插件的 system 变更。失败或取消压缩不会升级。会话恢复和 `/tree` 切换按活动分支恢复，底部 `MCP:N` 随之更新；已从配置删除的服务不会被历史会话重新激活。服务端工具 schema 变化时需新建会话。工具调用顺序执行；超时后重置该连接，进程或远程会话内的状态可能丢失。晚加入的桥接调用不享有提供商侧原生工具 schema 校验，压缩后缓存也不保证保留。
 
 ### Chrome DevTools MCP（本机 stdio）
 
